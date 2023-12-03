@@ -112,15 +112,36 @@ async function run() {
       res.send({ admin });
     });
 
+    // app.get("/users", verifyToken, verifyAdmin, async (req, res) => {
+    //   const email = req.query.email;
+    //   if (req.query.email) {
+    //     const query = {email: email};
+    //   await userCollection.find(query).toArray();
+    //   }
+    //   else {
+    //     await userCollection.find().toArray();
+    //   }
+
+    //   // res.send(result);
+    // });
+
     app.get("/users", verifyToken, verifyAdmin, async (req, res) => {
-      console.log(req.headers);
-      const result = await userCollection.find().toArray();
+      const email = req.query.email;
+      let result;
+
+      if (email) {
+        const query = { email: email };
+        result = await userCollection.find(query).toArray();
+      } else {
+        result = await userCollection.find().toArray();
+      }
+
       res.send(result);
     });
 
-     app.get("/user",  async (req, res) => {
-        const email = req.query.email;
-      const query = {email: email};
+    app.get("/user", async (req, res) => {
+      const email = req.query.email;
+      const query = { email: email };
       const result = await userCollection.find(query).toArray();
       res.send(result);
     });
@@ -132,16 +153,16 @@ async function run() {
 
     app.get("/classes", async (req, res) => {
       const email = req.query.email;
-      const query = {email: email};
+      const query = { email: email };
       const result = await classCollection.find(query).toArray();
       res.send(result);
     });
 
-     app.get("/allClass", async (req, res) => {
+    app.get("/allClass", async (req, res) => {
       const result = await classCollection.find().toArray();
       res.send(result);
-     });
-    
+    });
+
     //   app.get("/allAproveClass", async (req, res) => {
     //   const result = await classCollection.find().toArray();
     //   res.send(result);
@@ -207,7 +228,7 @@ async function run() {
       verifyAdmin,
 
       async (req, res) => {
-        const email= req.params.email;
+        const email = req.params.email;
         const filter = { email: email };
         const updatedDoc = {
           $set: {
@@ -242,8 +263,8 @@ async function run() {
         res.send(result);
       }
     );
-// classs accept and reject
-       app.patch(
+    // classs accept and reject
+    app.patch(
       "/admin/classReqAccept/:id",
       verifyToken,
       verifyAdmin,
@@ -253,7 +274,7 @@ async function run() {
         const filter = { _id: new ObjectId(id) };
         const updatedDoc = {
           $set: {
-            status: "Accepted"
+            status: "Accepted",
           },
         };
         const result = await classCollection.updateOne(filter, updatedDoc);
