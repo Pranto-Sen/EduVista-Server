@@ -3,6 +3,7 @@ const app = express();
 const jwt = require("jsonwebtoken");
 const cors = require("cors");
 require("dotenv").config();
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const port = process.env.PORT || 5000;
 
 // middleware
@@ -33,6 +34,12 @@ async function run() {
     const classCollection = client
       .db("StudentClassDB")
       .collection("classCollection");
+    const paymentCollection = client
+      .db("StudentClassDB")
+      .collection("paymentCollection");
+    const enrollCollection = client
+      .db("StudentClassDB")
+      .collection("enrollCollection");
 
     // users related api
     app.post("/users", async (req, res) => {
@@ -125,6 +132,49 @@ async function run() {
     //   // res.send(result);
     // });
 
+    // paymentService.
+    // payment intent
+    app.post("/create-payment-intent", async (req, res) => {
+      const { price } = req.body;
+      const amount = parseInt(price * 100);
+      console.log(amount, "amount inside the intent");
+
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: amount,
+        currency: "usd",
+        payment_method_types: ["card"],
+      });
+
+      res.send({
+        clientSecret: paymentIntent.client_secret,
+      });
+    });
+
+    app.get("/payments/:email", verifyToken, async (req, res) => {
+      const query = { email: req.params.email };
+      if (req.params.email !== req.decoded.email) {
+        return res.status(403).send({ message: "forbidden access" });
+      }
+      const result = await paymentCollection.find(query).toArray();
+      res.send(result);
+    });
+
+    app.post("/payments", async (req, res) => {
+      const payment = req.body;
+      const paymentResult = await paymentCollection.insertOne(payment);
+
+      console.log("payment info", payment);
+    
+      res.send(paymentResult);
+    });
+
+ app.post("/enrollClass", async (req, res) => {
+   const user = req.body;
+   const result = await enrollCollection.insertOne(user);
+   res.send(result);
+ });
+
+
     app.get("/users", verifyToken, verifyAdmin, async (req, res) => {
       const email = req.query.email;
       let result;
@@ -185,6 +235,12 @@ async function run() {
 
       res.send(result);
     });
+    app.get("/class/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await classCollection.findOne(query);
+      res.send(result);
+    });
 
     app.delete("/class/:id", async (req, res) => {
       const id = req.params.id;
@@ -205,19 +261,35 @@ async function run() {
       res.send({ teacher });
     });
 
+      app.get("/student/:email", async (req, res) => {
+        const email = req.params.email;
+        console.log(email);
+        const query = { email: email };
+        const user = await userCollection.findOne(query);
+        let student = false;
+        if (user) {
+          student = user?.role === "Student";
+        }
+        res.send({ student });
+      });
+
     app.patch(
-      "/users/admin/:id",
+      "/users/admin/:email",
       verifyToken,
       verifyAdmin,
       async (req, res) => {
-        const id = req.params.id;
-        const filter = { _id: new ObjectId(id) };
+        // const id = req.params.id;
+        // const filter = { _id: new ObjectId(id) };
+        const email = req.params.email;
+        const filter = { email: email };
         const updatedDoc = {
           $set: {
             role: "admin",
           },
         };
+
         const result = await userCollection.updateOne(filter, updatedDoc);
+        const result2 = await teacherCollection.updateOne(filter, updatedDoc);
         res.send(result);
       }
     );
@@ -301,9 +373,9 @@ async function run() {
     // await client.connect();
     // Send a ping to confirm a successful connection
     // await client.db("admin").command({ ping: 1 });
-    console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!"
-    );
+    // console.log(
+    //   "Pinged your deployment. You successfully connected to MongoDB!"
+    // );
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
